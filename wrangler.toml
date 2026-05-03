@@ -26,3 +26,19 @@ ADMIN_USERNAME = "admin"    # change to your desired admin username
 # ── Secrets (set via CLI, NOT stored in this file) ────────────────────────────
 # wrangler secret put ADMIN_PASSWORD   →  your admin login password
 # wrangler secret put JWT_SECRET       →  any long random string (e.g. `openssl rand -hex 32`)
+
+# ── observability ─────────────────────────────────────────────────────────────
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1
