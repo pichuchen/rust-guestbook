@@ -16,6 +16,7 @@ hex = "0.4"
 base64 = "0.22"
 getrandom = { version = "0.2", features = ["js"] }
 subtle = "2"
+percent-encoding = "2"
 
 [profile.release]
 opt-level = "z"

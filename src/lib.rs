@@ -98,8 +98,9 @@ fn create_jwt(username: &str, secret: &str) -> String {
     let exp = now + 86400u64; // 24 hours
 
     let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"HS256","typ":"JWT"}"#);
-    let payload = URL_SAFE_NO_PAD
-        .encode(format!(r#"{{"sub":"{}","iat":{},"exp":{}}}"#, username, now, exp).as_bytes());
+    // Use serde_json to guarantee proper JSON escaping of the username.
+    let payload_json = serde_json::json!({"sub": username, "iat": now, "exp": exp}).to_string();
+    let payload = URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
 
     let signing_input = format!("{}.{}", header, payload);
 
@@ -121,16 +122,15 @@ fn verify_jwt(token: &str, secret: &str) -> Option<String> {
     let payload_b64 = parts.next()?;
     let sig_b64 = parts.next()?;
 
-    // Verify HMAC signature
+    // Decode the provided signature bytes.
+    let sig_bytes = URL_SAFE_NO_PAD.decode(sig_b64).ok()?;
+
+    // verify_slice internally uses constant-time comparison (via subtle).
     let signing_input = format!("{}.{}", header_b64, payload_b64);
     let mut mac =
         Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key size");
     mac.update(signing_input.as_bytes());
-    let expected_sig = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
-
-    if expected_sig != sig_b64 {
-        return None;
-    }
+    mac.verify_slice(&sig_bytes).ok()?;
 
     // Decode and validate payload
     let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64).ok()?;
@@ -156,16 +156,20 @@ async fn check_auth(req: &Request, env: &Env) -> Result<Option<String>> {
 
 // ─── Misc Helpers ─────────────────────────────────────────────────────────────
 
-fn generate_attachment_key(filename: &str) -> String {
+fn generate_attachment_key(filename: &str) -> Result<String> {
     let mut bytes = [0u8; 8];
-    getrandom::getrandom(&mut bytes).unwrap_or(());
+    getrandom::getrandom(&mut bytes)
+        .map_err(|e| Error::RustError(format!("Failed to generate random bytes: {}", e)))?;
     let ts = Date::now().as_millis();
-    // Sanitise the filename to avoid path traversal
-    let safe_name = filename
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
-        .collect::<String>();
-    format!("{}-{}/{}", ts, hex::encode(bytes), safe_name)
+    // Sanitise the filename to avoid path traversal.
+    let safe_name = {
+        let s: String = filename
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
+            .collect();
+        if s.is_empty() { "file".to_string() } else { s }
+    };
+    Ok(format!("{}-{}/{}", ts, hex::encode(bytes), safe_name))
 }
 
 // ─── Main Event Handler ───────────────────────────────────────────────────────
@@ -213,8 +217,12 @@ async fn handle_request(mut req: Request, env: &Env, path: &str) -> Result<Respo
 
         // ── Attachment retrieval ──
         (Method::Get, p) if p.starts_with("/api/attachments/") => {
-            let key = &p["/api/attachments/".len()..];
-            api_get_attachment(key, env).await
+            let raw_key = &p["/api/attachments/".len()..];
+            // Percent-decode to handle any encoded characters in the key.
+            let key = percent_encoding::percent_decode_str(raw_key)
+                .decode_utf8_lossy()
+                .into_owned();
+            api_get_attachment(&key, env).await
         }
 
         // ── Admin auth ──
@@ -282,8 +290,19 @@ async fn api_create_message(req: &mut Request, env: &Env) -> Result<Response> {
     if name.is_empty() {
         return err_response("Name is required", 400);
     }
+    if name.len() > 100 {
+        return err_response("Name must be 100 characters or fewer", 400);
+    }
     if content.is_empty() {
         return err_response("Content is required", 400);
+    }
+    if content.len() > 2000 {
+        return err_response("Content must be 2000 characters or fewer", 400);
+    }
+    if let Some(ref email) = body.email {
+        if email.len() > 200 {
+            return err_response("Email must be 200 characters or fewer", 400);
+        }
     }
 
     let db = env.d1("DB")?;
@@ -339,7 +358,7 @@ async fn api_upload_attachment(req: &mut Request, env: &Env) -> Result<Response>
         return err_response("File exceeds 25 MB limit", 413);
     }
 
-    let key = generate_attachment_key(&filename);
+    let key = generate_attachment_key(&filename)?;
     bucket.put(&key, bytes).execute().await?;
 
     ok_response(serde_json::json!({"key": key}))
