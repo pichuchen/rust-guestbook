@@ -37,6 +37,14 @@ jobs:
           DB_DATABASE_NAME: ${{ secrets.DB_DATABASE_NAME }}
           DB_DATABASE_ID: ${{ secrets.DB_DATABASE_ID }}
 
+      - name: Apply D1 schema migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: d1 execute ${{ secrets.DB_DATABASE_NAME }} --file=schema.sql
+
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
