@@ -185,10 +185,23 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         return Ok(Response::empty()?.with_headers(h));
     }
 
+    let method = req.method().to_string();
     let url = req.url()?;
-    let path = url.path();
+    let path = url.path().to_string();
+    let ray_id = req.headers().get("cf-ray").unwrap_or(None).unwrap_or_default();
 
-    let mut response = handle_request(req, &env, path).await?;
+    let mut response = match handle_request(req, &env, &path).await {
+        Ok(r) => r,
+        Err(e) => {
+            console_error!("Error handling {} {} (ray={}): {:?}", method, path, ray_id, e);
+            let msg = if ray_id.is_empty() {
+                "Internal server error".to_string()
+            } else {
+                format!("Internal server error (ref: {})", ray_id)
+            };
+            err_response(&msg, 500)?
+        }
+    };
 
     // Attach CORS header to every response
     response.headers_mut().set("Access-Control-Allow-Origin", "*")?;
