@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>留言板 · Rust Guestbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .message-card { transition: transform .15s ease, box-shadow .15s ease; }
+    .message-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-sky-50 min-h-screen">
+  <div class="max-w-2xl mx-auto px-4 py-10">
+
+    <!-- Header -->
+    <header class="mb-8 flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-extrabold text-indigo-700 tracking-tight">📝 留言板</h1>
+        <p class="text-gray-500 mt-1 text-sm">歡迎留下您的訊息！留言經審核後將公開顯示。</p>
+      </div>
+      <a href="/admin" class="text-xs text-indigo-400 hover:text-indigo-600 transition-colors">後台管理 →</a>
+    </header>
+
+    <!-- Submit Form -->
+    <div class="bg-white rounded-2xl shadow-md p-6 mb-8">
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">✏️ 留下您的留言</h2>
+      <form id="msgForm" novalidate>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">姓名 <span class="text-red-500">*</span></label>
+            <input id="name" type="text" required maxlength="100" autocomplete="name"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+              placeholder="您的名字" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">電子郵件（選填）</label>
+            <input id="email" type="email" maxlength="200" autocomplete="email"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+              placeholder="your@email.com" />
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">留言內容 <span class="text-red-500">*</span></label>
+          <textarea id="content" rows="4" required maxlength="2000"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none"
+            placeholder="請輸入您的留言…"></textarea>
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">附件（選填，最大 25 MB）</label>
+          <input id="attachment" type="file"
+            class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+        </div>
+
+        <!-- Upload progress -->
+        <div id="uploadProgress" class="hidden mt-3">
+          <div class="flex items-center gap-2 text-sm text-indigo-600">
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+            </svg>
+            正在上傳附件…
+          </div>
+        </div>
+
+        <div id="formStatus" class="mt-3 text-sm min-h-[20px]"></div>
+
+        <div class="mt-4 flex justify-end">
+          <button id="submitBtn" type="submit"
+            class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors">
+            送出留言
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Messages List -->
+    <section>
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">💬 所有留言</h2>
+      <div id="msgList" class="space-y-4">
+        <div class="text-center text-gray-400 py-8 text-sm">載入中…</div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const API = '';   // same origin
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function esc(t) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(t ?? ''));
+      return d.innerHTML;
+    }
+
+    function fmtDate(s) {
+      if (!s) return '';
+      try {
+        return new Date(s.includes('T') || s.includes('+') ? s : s + 'Z')
+          .toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      } catch { return s; }
+    }
+
+    // ── Load messages ─────────────────────────────────────────────────────────
+    async function loadMessages() {
+      try {
+        const res  = await fetch(`${API}/api/messages`);
+        const data = await res.json();
+        const list = document.getElementById('msgList');
+
+        if (!data.success || !data.data || data.data.length === 0) {
+          list.innerHTML = '<div class="text-center text-gray-400 py-10 text-sm">還沒有留言，成為第一個留言的人吧！</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(m => `
+          <article class="message-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm shrink-0">
+                  ${esc(m.name.charAt(0).toUpperCase())}
+                </span>
+                <div class="min-w-0">
+                  <span class="font-semibold text-gray-800 text-sm">${esc(m.name)}</span>
+                  ${m.email ? `<span class="text-gray-400 text-xs ml-1">&lt;${esc(m.email)}&gt;</span>` : ''}
+                </div>
+              </div>
+              <time class="text-xs text-gray-400 shrink-0">${fmtDate(m.created_at)}</time>
+            </div>
+            <p class="mt-3 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">${esc(m.content)}</p>
+            ${m.attachment_key ? `
+            <div class="mt-3 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+              <a href="${API}/api/attachments/${encodeURIComponent(m.attachment_key)}" target="_blank" rel="noopener"
+                class="text-indigo-500 hover:text-indigo-700 text-xs font-medium hover:underline">查看附件</a>
+            </div>` : ''}
+          </article>
+        `).join('');
+      } catch (e) {
+        document.getElementById('msgList').innerHTML =
+          '<div class="text-center text-red-400 py-10 text-sm">載入失敗，請重新整理頁面。</div>';
+      }
+    }
+
+    // ── Form submission ───────────────────────────────────────────────────────
+    document.getElementById('msgForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const status    = document.getElementById('formStatus');
+      const submitBtn = document.getElementById('submitBtn');
+      const progress  = document.getElementById('uploadProgress');
+
+      submitBtn.disabled = true;
+      status.innerHTML   = '';
+
+      try {
+        // Upload attachment first (if any)
+        let attachmentKey = null;
+        const file = document.getElementById('attachment').files[0];
+        if (file) {
+          if (file.size > 25 * 1024 * 1024) {
+            throw new Error('檔案大小不可超過 25 MB');
+          }
+          progress.classList.remove('hidden');
+          const fd = new FormData();
+          fd.append('file', file);
+          const upRes  = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
+          const upData = await upRes.json();
+          progress.classList.add('hidden');
+          if (!upData.success) throw new Error('附件上傳失敗：' + (upData.error || '未知錯誤'));
+          attachmentKey = upData.data.key;
+        }
+
+        // Submit message
+        const res  = await fetch(`${API}/api/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name:           document.getElementById('name').value.trim(),
+            email:          document.getElementById('email').value.trim() || null,
+            content:        document.getElementById('content').value.trim(),
+            attachment_key: attachmentKey,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          status.innerHTML = '<span class="text-green-600">✓ 留言已送出，審核後將顯示。</span>';
+          e.target.reset();
+        } else {
+          throw new Error(data.error || '送出失敗');
+        }
+      } catch (err) {
+        progress.classList.add('hidden');
+        status.innerHTML = `<span class="text-red-500">✗ ${esc(err.message)}</span>`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    loadMessages();
+  </script>
+</body>
+</html>

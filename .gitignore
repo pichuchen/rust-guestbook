@@ -1,0 +1,29 @@
+# Rust / Cargo
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Worker build artifacts
+build/
+worker/
+
+# Node / Wrangler
+node_modules/
+.wrangler/
+dist/
+
+# Environment / secrets
+.dev.vars
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db

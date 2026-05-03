@@ -1,0 +1,27 @@
+name = "rust-guestbook"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-03-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+# ── D1 Database ──────────────────────────────────────────────────────────────
+# Run `wrangler d1 create guestbook` and paste the `database_id` below.
+[[d1_databases]]
+binding      = "DB"
+database_name = "guestbook"
+database_id  = "00000000-0000-0000-0000-000000000000"   # <-- replace after `wrangler d1 create`
+
+# ── R2 Bucket ────────────────────────────────────────────────────────────────
+# Run `wrangler r2 bucket create guestbook-attachments` first.
+[[r2_buckets]]
+binding     = "ATTACHMENTS"
+bucket_name = "guestbook-attachments"
+
+# ── Environment variables ─────────────────────────────────────────────────────
+[vars]
+ADMIN_USERNAME = "admin"    # change to your desired admin username
+
+# ── Secrets (set via CLI, NOT stored in this file) ────────────────────────────
+# wrangler secret put ADMIN_PASSWORD   →  your admin login password
+# wrangler secret put JWT_SECRET       →  any long random string (e.g. `openssl rand -hex 32`)
