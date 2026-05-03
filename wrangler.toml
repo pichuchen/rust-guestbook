@@ -6,11 +6,12 @@ compatibility_date = "2024-03-01"
 command = "cargo install -q worker-build@^0.8 && worker-build --release"
 
 # ── D1 Database ──────────────────────────────────────────────────────────────
-# Run `wrangler d1 create guestbook` and paste the `database_id` below.
+# Set DB_DATABASE_NAME and DB_DATABASE_ID as environment variables (or GitHub
+# secrets for CI/CD) before deploying.  For local dev: export both variables.
 [[d1_databases]]
-binding      = "DB"
-database_name = "guestbook"
-database_id  = "${DB_DATABASE_ID}"   # Set DB_DATABASE_ID env var (GitHub secret for CI/CD; export locally)
+binding       = "DB"
+database_name = "${DB_DATABASE_NAME}"
+database_id   = "${DB_DATABASE_ID}"
 
 # ── R2 Bucket ────────────────────────────────────────────────────────────────
 # Run `wrangler r2 bucket create guestbook-attachments` first.

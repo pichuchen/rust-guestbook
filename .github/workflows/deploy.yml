@@ -32,8 +32,9 @@ jobs:
         run: cargo check --target wasm32-unknown-unknown
 
       - name: Substitute environment variables in wrangler.toml
-        run: envsubst '$DB_DATABASE_ID' < wrangler.toml > wrangler.toml.tmp && mv wrangler.toml.tmp wrangler.toml
+        run: envsubst '$DB_DATABASE_NAME $DB_DATABASE_ID' < wrangler.toml > wrangler.toml.tmp && mv wrangler.toml.tmp wrangler.toml
         env:
+          DB_DATABASE_NAME: ${{ secrets.DB_DATABASE_NAME }}
           DB_DATABASE_ID: ${{ secrets.DB_DATABASE_ID }}
 
       - name: Deploy with Wrangler

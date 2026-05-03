@@ -56,22 +56,25 @@ rust-guestbook/
 ### 1. Create D1 Database
 
 ```bash
-wrangler d1 create guestbook
+wrangler d1 create guestbook-db
 ```
 
-Copy the `database_id` from the output and export it as an environment variable (do **not** hard-code it in `wrangler.toml`):
+Copy the `database_id` from the output and export both the name and ID as environment variables (do **not** hard-code them in `wrangler.toml`):
 
 ```bash
+export DB_DATABASE_NAME="guestbook-db"
 export DB_DATABASE_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
-For CI/CD (GitHub Actions), add `DB_DATABASE_ID` as a repository secret:
+For CI/CD (GitHub Actions), add both as repository secrets:
 **Settings → Secrets and variables → Actions → New repository secret**
+- `DB_DATABASE_NAME` → `guestbook-db`
+- `DB_DATABASE_ID` → the UUID from the command above
 
 Apply the schema:
 
 ```bash
-wrangler d1 execute guestbook --file=schema.sql
+wrangler d1 execute guestbook-db --file=schema.sql
 ```
 
 ---
@@ -117,7 +120,7 @@ For local testing (Wrangler will use a local D1 emulator):
 
 ```bash
 # Apply schema locally first
-wrangler d1 execute guestbook --local --file=schema.sql
+wrangler d1 execute guestbook-db --local --file=schema.sql
 
 # Create a .dev.vars file for secrets
 cat > .dev.vars <<EOF
@@ -125,10 +128,11 @@ ADMIN_PASSWORD=your_password_here
 JWT_SECRET=your_jwt_secret_here
 EOF
 
-# Export DB_DATABASE_ID (from `wrangler d1 create` output)
+# Export DB_DATABASE_NAME and DB_DATABASE_ID (from `wrangler d1 create` output)
+export DB_DATABASE_NAME="guestbook-db"
 export DB_DATABASE_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# Run dev server (wrangler.toml substitutes ${DB_DATABASE_ID} automatically)
+# Run dev server (wrangler.toml substitutes ${DB_DATABASE_NAME} and ${DB_DATABASE_ID} automatically)
 wrangler dev
 ```
 
