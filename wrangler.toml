@@ -10,7 +10,7 @@ command = "cargo install -q worker-build@^0.8 && worker-build --release"
 [[d1_databases]]
 binding      = "DB"
 database_name = "guestbook"
-database_id  = "00000000-0000-0000-0000-000000000000"   # <-- replace after `wrangler d1 create`
+database_id  = "${DB_DATABASE_ID}"   # Set DB_DATABASE_ID env var (GitHub secret for CI/CD; export locally)
 
 # ── R2 Bucket ────────────────────────────────────────────────────────────────
 # Run `wrangler r2 bucket create guestbook-attachments` first.
