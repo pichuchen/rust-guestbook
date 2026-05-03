@@ -28,6 +28,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: cargo check
+        run: cargo check --target wasm32-unknown-unknown
+
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
