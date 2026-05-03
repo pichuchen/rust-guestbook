@@ -178,7 +178,7 @@ fn generate_attachment_key(filename: &str) -> Result<String> {
 pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     // Handle CORS preflight
     if req.method() == Method::Options {
-        let mut h = Headers::new();
+        let h = Headers::new();
         h.set("Access-Control-Allow-Origin", "*")?;
         h.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")?;
         h.set("Access-Control-Allow-Headers", "Content-Type, Authorization")?;
@@ -389,7 +389,7 @@ async fn api_get_attachment(key: &str, env: &Env) -> Result<Response> {
                 let safe_filename = key.split('/').next_back().unwrap_or("file");
                 let bytes = body.bytes().await?;
 
-                let mut headers = Headers::new();
+                let headers = Headers::new();
                 headers.set("Content-Type", &content_type)?;
                 headers.set(
                     "Content-Disposition",

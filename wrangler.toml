@@ -3,7 +3,7 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2024-03-01"
 
 [build]
-command = "cargo install -q worker-build@^0.1 && worker-build --release"
+command = "cargo install -q worker-build@^0.8 && worker-build --release"
 
 # ── D1 Database ──────────────────────────────────────────────────────────────
 # Run `wrangler d1 create guestbook` and paste the `database_id` below.
