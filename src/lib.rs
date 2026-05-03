@@ -188,7 +188,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let url = req.url()?;
     let path = url.path();
 
-    let mut response = handle_request(req, &env, &path).await?;
+    let mut response = handle_request(req, &env, path).await?;
 
     // Attach CORS header to every response
     response.headers_mut().set("Access-Control-Allow-Origin", "*")?;
@@ -386,7 +386,7 @@ async fn api_get_attachment(key: &str, env: &Env) -> Result<Response> {
                     .http_metadata()
                     .content_type
                     .unwrap_or_else(|| "application/octet-stream".to_string());
-                let safe_filename = key.split('/').last().unwrap_or("file");
+                let safe_filename = key.split('/').next_back().unwrap_or("file");
                 let bytes = body.bytes().await?;
 
                 let mut headers = Headers::new();
