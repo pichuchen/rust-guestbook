@@ -235,10 +235,16 @@ async fn handle_request(mut req: Request, env: &Env, path: &str) -> Result<Respo
                     let rest = &p["/api/admin/messages/".len()..];
                     if rest.ends_with("/approve") && m == Method::Put {
                         let id_str = rest.trim_end_matches("/approve");
-                        let id = id_str.parse::<i64>().unwrap_or(0);
+                        let id = match id_str.parse::<i64>() {
+                            Ok(n) if n > 0 => n,
+                            _ => return err_response("Invalid message ID", 400),
+                        };
                         api_approve_message(id, env).await
                     } else if m == Method::Delete {
-                        let id = rest.parse::<i64>().unwrap_or(0);
+                        let id = match rest.parse::<i64>() {
+                            Ok(n) if n > 0 => n,
+                            _ => return err_response("Invalid message ID", 400),
+                        };
                         api_delete_message(id, env).await
                     } else {
                         err_response("Not found", 404)
@@ -328,6 +334,10 @@ async fn api_upload_attachment(req: &mut Request, env: &Env) -> Result<Response>
     if bytes.is_empty() {
         return err_response("Empty file", 400);
     }
+    const MAX_SIZE: usize = 25 * 1024 * 1024; // 25 MB
+    if bytes.len() > MAX_SIZE {
+        return err_response("File exceeds 25 MB limit", 413);
+    }
 
     let key = generate_attachment_key(&filename);
     bucket.put(&key, bytes).execute().await?;
@@ -336,8 +346,12 @@ async fn api_upload_attachment(req: &mut Request, env: &Env) -> Result<Response>
 }
 
 async fn api_get_attachment(key: &str, env: &Env) -> Result<Response> {
-    // Basic path traversal guard
-    if key.contains("..") || key.is_empty() {
+    // Guard against path traversal, null bytes, absolute paths, and empty keys
+    if key.is_empty()
+        || key.contains("..")
+        || key.starts_with('/')
+        || key.contains('\0')
+    {
         return err_response("Invalid key", 400);
     }
 
@@ -394,7 +408,14 @@ async fn api_admin_login(req: &mut Request, env: &Env) -> Result<Response> {
         Err(_) => return err_response("Server configuration error", 500),
     };
 
-    if body.username != admin_username || body.password != admin_password {
+    if body.username != admin_username {
+        return err_response("Invalid credentials", 401);
+    }
+
+    // Constant-time password comparison to prevent timing attacks
+    use subtle::ConstantTimeEq;
+    let password_match = body.password.as_bytes().ct_eq(admin_password.as_bytes());
+    if !bool::from(password_match) {
         return err_response("Invalid credentials", 401);
     }
 
@@ -414,9 +435,6 @@ async fn api_admin_get_messages(env: &Env) -> Result<Response> {
 }
 
 async fn api_approve_message(id: i64, env: &Env) -> Result<Response> {
-    if id <= 0 {
-        return err_response("Invalid message ID", 400);
-    }
     let db = env.d1("DB")?;
     db.prepare("UPDATE messages SET approved = 1 WHERE id = ?1")
         .bind(&[JsValue::from_f64(id as f64)])?
@@ -426,9 +444,6 @@ async fn api_approve_message(id: i64, env: &Env) -> Result<Response> {
 }
 
 async fn api_delete_message(id: i64, env: &Env) -> Result<Response> {
-    if id <= 0 {
-        return err_response("Invalid message ID", 400);
-    }
     let db = env.d1("DB")?;
     db.prepare("DELETE FROM messages WHERE id = ?1")
         .bind(&[JsValue::from_f64(id as f64)])?
